@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Advanced Scraper — Ops</title>
+  <style>
+    body { font-family: system-ui, sans-serif; background: #0f1419; color: #e7ecf3; margin: 0; padding: 24px; max-width: 800px; }
+    h1 { margin-bottom: 8px; }
+    .warn { background: #3d2a00; border: 1px solid #f5c542; color: #f5c542; padding: 12px 14px; border-radius: 10px; margin: 16px 0; }
+    .card { background: #1a2332; border-radius: 12px; padding: 16px; margin: 12px 0; }
+    code { background: #0b1020; padding: 2px 6px; border-radius: 4px; }
+    a { color: #7c9cff; }
+  </style>
+</head>
+<body>
+  <h1>Advanced Scraper</h1>
+  <p>Authorized testing toolkit only.</p>
+  <div class="warn">
+    <strong>Legal:</strong> Use only on systems you own or have explicit written permission to test.
+  </div>
+  <div class="card">
+    <h3>Run locally</h3>
+    <pre>python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+python advanced_scraper.py</pre>
+  </div>
+  <div class="card">
+    <h3>Modules</h3>
+    <ul>
+      <li><code>advanced_scraper.py</code> — main toolkit</li>
+      <li><code>api_server.py</code> — optional API</li>
+      <li><code>orchestrator.py</code> — orchestration helper</li>
+    </ul>
+  </div>
+  <p>See repository README and PRODUCTION.md.</p>
+</body>
+</html>
