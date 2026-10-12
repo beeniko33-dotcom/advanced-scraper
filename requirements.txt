@@ -1,0 +1,10 @@
+# Core scraping & async
+aiohttp>=3.9
+beautifulsoup4>=4.12
+lxml>=5.0
+
+# CLI / display
+colorama>=0.4
+rich>=13.0
+
+# Standard library is used for most other functionality
