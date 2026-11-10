@@ -1,68 +1,90 @@
-import asyncio, pexpect, os, json, subprocess
-from fastapi import FastAPI, Query
-from pydantic import BaseModel
-import uvicorn
+"""Authenticated HTTP interface for the supported scraping workflows.
 
-app = FastAPI()
+The interactive CLI remains the full local operator interface. This API exposes
+content scraping workflows only; it is not a remote command-execution surface.
+"""
+import hmac
+import os
+from typing import Optional
 
-MODULES = {
-    1: "Scrape URL", 2: "Crawl site", 3: "Image Search", 4: "Stealth Fetch",
-    5: "Brute-Force Login", 6: "Directory Brute", 7: "Spider Emails",
-    8: "SQLi Scan", 9: "XSS Scan", 10: "CSRF Check", 11: "Port Scan",
-    12: "Subdomain Enum", 13: "CMD Injection", 14: "LFI/RFI Probe",
-    15: "Rate-Limit Bypass", 16: "TCP Flood", 17: "Email Bomber",
-    18: "SMS Bomber", 19: "OTP Brute-Force", 20: "Deep People Search",
-    21: "AI Command", 23: "Reverse Shell Listener", 24: "Payload Generator",
-    25: "Local PrivEsc Check", 26: "Persistence Tester"
-}
+from fastapi import Depends, FastAPI, HTTPException
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from pydantic import BaseModel, Field
 
-async def run_interactive(module_id: int, target: str):
-    try:
-        child = pexpect.spawn('python advanced_scraper.py', encoding='utf-8', timeout=120)
-        child.expect('Choice:')
-        child.sendline(str(module_id))
-        index = child.expect(['URL:', 'url:', 'IP:', 'Name:', 'Command:', 'Choice:', pexpect.EOF, pexpect.TIMEOUT], timeout=10)
-        if index < 5:
-            child.sendline(target)
-        child.expect(['Choice:', pexpect.EOF], timeout=180)
-        output = child.before + child.after
-        child.terminate(force=True)
-        return output
-    except Exception as e:
-        return f"Error executing module: {str(e)}"
+from advanced_scraper import AdvancedScraper
+
+app = FastAPI(
+    title="Advanced Scraper API",
+    description="Authenticated web scraping, crawling, and image search API.",
+    version="2.0.0",
+)
+bearer = HTTPBearer(auto_error=False)
+
+
+def require_api_token(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer),
+) -> None:
+    """Fail closed unless a configured bearer token matches."""
+    expected = os.environ.get("SCRAPER_API_TOKEN", "")
+    if not expected:
+        raise HTTPException(
+            status_code=503,
+            detail="API authentication is not configured by the operator.",
+        )
+    if credentials is None or credentials.scheme.lower() != "bearer":
+        raise HTTPException(status_code=401, detail="Authentication required.")
+    if not hmac.compare_digest(credentials.credentials, expected):
+        raise HTTPException(status_code=401, detail="Invalid credentials.")
+
+
+class ScrapeRequest(BaseModel):
+    url: str = Field(..., min_length=1, max_length=2048)
+
+
+class CrawlRequest(BaseModel):
+    url: str = Field(..., min_length=1, max_length=2048)
+    max_depth: int = Field(default=2, ge=1, le=10)
+
+
+class ImageSearchRequest(BaseModel):
+    query: str = Field(..., min_length=1, max_length=500)
+    count: int = Field(default=5, ge=1, le=50)
+
 
 @app.get("/")
 async def root():
-    return {"message": "Advanced Scraper API is live", "modules": MODULES}
+    return {
+        "message": "Advanced Scraper API",
+        "status": "available",
+        "authentication": "required for operational endpoints",
+    }
 
-@app.get("/run/{module_id}")
-async def run_module(module_id: int, target: str = Query(..., description="Target URL/IP/Name")):
-    if module_id not in MODULES:
-        return {"error": "Invalid module ID"}
-    output = await run_interactive(module_id, target)
-    return {"module": MODULES[module_id], "target": target, "output": output}
 
-@app.get("/scan/all")
-async def scan_all(target: str = Query(..., description="Target for all modules")):
-    results = {}
-    for mid in [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,23,24,25,26]:
-        results[mid] = await run_interactive(mid, target)
-    return {"target": target, "results": results}
+@app.get("/health")
+async def health():
+    return {"status": "ok"}
+
+
+@app.post("/scrape", dependencies=[Depends(require_api_token)])
+async def scrape(request: ScrapeRequest):
+    return await AdvancedScraper().scrape_url(request.url)
+
+
+@app.post("/crawl", dependencies=[Depends(require_api_token)])
+async def crawl(request: CrawlRequest):
+    return await AdvancedScraper().crawl(request.url, max_depth=request.max_depth)
+
+
+@app.post("/images", dependencies=[Depends(require_api_token)])
+async def image_search(request: ImageSearchRequest):
+    return await AdvancedScraper().search_images(
+        request.query, count=request.count
+    )
+
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    import uvicorn
 
-@app.get("/think")
-async def ai_think(target: str = Query(...)):
-    import glob
-    files = sorted(glob.glob(f"orchestration_{target.replace('.','_')}*.json"), reverse=True)
-    if not files: return {"error": "No scan data found"}
-    with open(files[0]) as f: data = json.load(f)
-    from ai_brain import think_about
-    return {"target": target, "ai_analysis": think_about(target, data)}
-
-@app.post("/learn")
-async def ai_learn(target: str, finding: str):
-    from ai_brain import learn
-    learn(target, finding)
-    return {"status": "learned"}
+    host = os.environ.get("SCRAPER_API_HOST", "127.0.0.1")
+    port = int(os.environ.get("SCRAPER_API_PORT", "8000"))
+    uvicorn.run(app, host=host, port=port)
